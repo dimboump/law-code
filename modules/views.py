@@ -65,13 +65,9 @@ class ViewsManager:
             st.session_state["system_prompt"] = self.system_prompt
             st.session_state["temperature"] = temperature or 0
 
-            system_tokens = st.session_state.conversation_handler.count_tokens(
+            st.session_state.conversation_handler.count_tokens(
                 text=self.system_prompt, model=openai_model, role="system"
             )
-
-            user_tokens = st.session_state.conversation_handler.user_tokens
-            input_tokens = st.session_state.conversation_handler.input_tokens
-            output_tokens = st.session_state.conversation_handler.output_tokens
 
             st.divider()
 
@@ -79,16 +75,34 @@ class ViewsManager:
 
             with input_col:
                 input_cost = st.session_state.conversation_handler.calculate_cost(
-                    input_tokens, model=openai_model, type="input"
+                    st.session_state.conversation_handler.input_tokens,
+                    model=openai_model,
+                    type="input",
                 )
                 st.write("## Input")
                 st.write(
-                    f"### {input_tokens} (${input_cost:.04f})  \n"
-                    f"({system_tokens} συστήματος +  \n "
-                    f"{user_tokens} μηνύματος)"
+                    f"### {st.session_state.conversation_handler.input_tokens} (${input_cost:.04f})"
+                )
+
+                input_cost_breakdown = (
+                    f"({st.session_state.conversation_handler.system_tokens} συστήματος +  \n "
+                )
+                if st.session_state["structured_output"]:
+                    st.session_state.conversation_handler.count_tokens(
+                        json.dumps(MQM_RESPONSE_SCHEMA, ensure_ascii=False, indent=2),
+                        model=openai_model,
+                        role="json",
+                    )
+                    input_cost_breakdown += (
+                        f"{st.session_state.conversation_handler.json_tokens} μοντέλου JSON + \n "
+                    )
+                st.write(
+                    input_cost_breakdown
+                    + f"{st.session_state.conversation_handler.user_tokens} μηνύματος)"
                 )
 
             with output_col:
+                output_tokens = st.session_state.conversation_handler.output_tokens
                 output_cost = st.session_state.conversation_handler.calculate_cost(
                     output_tokens, model=openai_model, type="output"
                 )
@@ -132,7 +146,7 @@ class ViewsManager:
             st.session_state.conversation_handler.add_message({"role": "user", "content": prompt})
             st.chat_message("user").write(prompt)
 
-            _ = st.session_state.conversation_handler.count_tokens(
+            st.session_state.conversation_handler.count_tokens(
                 text=prompt, model=openai_model, role="user"
             )
 
@@ -157,6 +171,7 @@ class ViewsManager:
             )
 
             if response.usage:
+                st.session_state.conversation_handler.input_tokens = response.usage.input_tokens
                 print(f"Sent {response.usage.input_tokens} tokens")
                 st.session_state.conversation_handler.output_tokens = response.usage.output_tokens
                 print(f"Received {response.usage.output_tokens} tokens")

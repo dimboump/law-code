@@ -6,9 +6,12 @@ type Message = dict[str, str]
 class ConversationHandler:
     def __init__(self) -> None:
         self.history: list[Message] = []
+        # Token counts
         self.system_tokens = 0
         self.user_tokens = 0
-        self.input_tokens = self.system_tokens + self.user_tokens
+        self.json_tokens = 0
+        # Total counts
+        self.input_tokens = self.system_tokens + self.json_tokens + self.user_tokens
         self.output_tokens = 0
 
     def add_message(self, message: Message) -> None:
@@ -24,9 +27,11 @@ class ConversationHandler:
         n_tokens = count_tokens(text, model)
 
         if role == "system":
-            self.system_tokens += n_tokens
+            self.system_tokens = n_tokens
         elif role == "user":
-            self.user_tokens += n_tokens
+            self.user_tokens = n_tokens
+        elif role == "json":
+            self.json_tokens = n_tokens
 
         self.input_tokens += n_tokens
 
