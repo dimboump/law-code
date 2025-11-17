@@ -101,7 +101,7 @@ class ViewsManager:
 
             if ENV == "DEV":
                 st.divider()
-                st.write(st.session_state.to_dict())
+                st.write(dict(sorted(st.session_state.to_dict().items())))
 
     def get_conversation_section(self) -> None:
         openai_model = st.session_state["openai_model"]
