@@ -5,11 +5,13 @@ import streamlit as st
 from openai import OpenAI
 from openai.types.responses.response_text_config_param import ResponseTextConfigParam
 
-from config import ENV, MQM_PROMPT
+from config import ENV, MQM_PROMPTS
 from modules.models import GPT
 
 # from modules.mqm_oai import MQMAnnotation, get_openai_schema
 from modules.mqm import MQMAnnotation, get_openai_schema
+
+MQM_RESPONSE_SCHEMA = get_openai_schema(MQMAnnotation)
 
 
 class ViewsManager:
@@ -20,8 +22,13 @@ class ViewsManager:
         self.get_sidebar()
         self.get_conversation_section()
 
-    def get_system_prompt_area(self):
-        system_prompt = MQM_PROMPT if st.session_state["structured_output"] else self.system_prompt
+    def get_system_prompt_area(self, with_structured_output: bool = False):
+        if with_structured_output:
+            scenario = st.radio("Σενάριο MQM:", options=["S-T", "R-T", "S-R-T"], key="scenario")
+
+            system_prompt = MQM_PROMPTS[scenario].strip()
+        else:
+            system_prompt = self.system_prompt
         self.system_prompt = st.text_area("System prompt:", value=system_prompt)
 
         if "{" and "}" in self.system_prompt:
@@ -41,7 +48,9 @@ class ViewsManager:
 
             st.toggle("Απάντηση για αξιολόγηση με MQM (σε JSON)", key="structured_output")
 
-            self.get_system_prompt_area()
+            self.get_system_prompt_area(
+                with_structured_output=st.session_state["structured_output"]
+            )
 
             temperature = st.number_input(
                 "Temperature (μεταξύ 0 και 1)",
@@ -133,7 +142,7 @@ class ViewsManager:
                         "type": "json_schema",
                         "name": "mqm_annotation",
                         "strict": True,
-                        "schema": get_openai_schema(MQMAnnotation),
+                        "schema": MQM_RESPONSE_SCHEMA,
                     }
                 }
             else:
