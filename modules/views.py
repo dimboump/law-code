@@ -1,14 +1,12 @@
 import json
-import re
 
+import regex
 import streamlit as st
 from openai import OpenAI
 from openai.types.responses.response_text_config_param import ResponseTextConfigParam
 
 from config import ENV, MQM_PROMPTS
 from modules.models import GPT
-
-# from modules.mqm_oai import MQMAnnotation, get_openai_schema
 from modules.mqm import MQMAnnotation, get_openai_schema
 
 MQM_RESPONSE_SCHEMA = get_openai_schema(MQMAnnotation)
@@ -19,107 +17,116 @@ class ViewsManager:
         self.system_prompt = "You are a helpful assistant."
 
     def get_main_view(self) -> None:
-        self.get_sidebar()
+        with st.sidebar:
+            self.get_sidebar()
+
         self.get_conversation_section()
+
+    def get_sidebar(self) -> None:
+        self.get_model_options()
+
+        st.divider()
+
+        self.get_cost_columns()
+
+        if ENV == "DEV":
+            st.divider()
+            st.write(dict(sorted(st.session_state.to_dict().items())))
+
+    def get_cost_columns(self) -> None:
+        input_col, output_col = st.columns(2)
+
+        st.session_state.conversation_handler.count_tokens(
+            text=self.system_prompt,
+            model=st.session_state.model_options["openai_model"],
+            role="system",
+        )
+
+        with input_col:
+            input_cost = st.session_state.conversation_handler.calculate_cost(
+                st.session_state.conversation_handler.input_tokens,
+                model=st.session_state.model_options["openai_model"],
+                type="input",
+            )
+            st.write("## Input")
+            st.write(
+                f"### {st.session_state.conversation_handler.input_tokens} (${input_cost:.04f})"
+            )
+
+            input_cost_breakdown = (
+                f"({st.session_state.conversation_handler.system_tokens} συστήματος +  \n "
+            )
+            if st.session_state["structured_output"]:
+                st.session_state.conversation_handler.count_tokens(
+                    json.dumps(MQM_RESPONSE_SCHEMA, ensure_ascii=False, indent=2),
+                    model=st.session_state.model_options["openai_model"],
+                    role="json",
+                )
+                input_cost_breakdown += (
+                    f"{st.session_state.conversation_handler.json_tokens} μοντέλου JSON + \n "
+                )
+            st.write(
+                input_cost_breakdown
+                + f"{st.session_state.conversation_handler.user_tokens} μηνύματος)"
+            )
+
+        with output_col:
+            output_tokens = st.session_state.conversation_handler.output_tokens
+            output_cost = st.session_state.conversation_handler.calculate_cost(
+                output_tokens, model=st.session_state.model_options["openai_model"], type="output"
+            )
+            st.write("## Output")
+            if output_cost < 0.001:
+                output_cost_str = "0"
+            else:
+                output_cost_str = f"{output_cost:.04f}"
+            st.write(f"### {output_tokens} (${output_cost_str})")
 
     def get_system_prompt_area(self, with_structured_output: bool = False):
         if with_structured_output:
             scenario = st.radio("Σενάριο MQM:", options=["S-T", "R-T", "S-R-T"], key="scenario")
-
             system_prompt = MQM_PROMPTS[scenario].strip()
         else:
             system_prompt = self.system_prompt
+
         self.system_prompt = st.text_area("System prompt:", value=system_prompt)
 
-        if "{" and "}" in self.system_prompt:
+        if "{" in self.system_prompt and "}" in self.system_prompt:
             with st.expander("Μεταβλητές στο system prompt", expanded=True):
                 self.system_prompt = self.get_prompt_with_placeholders()
 
-    def get_sidebar(self) -> None:
-        with st.sidebar:
-            if ENV in ("DEV", "UAT"):
-                from config import OPENAI_API_KEY, OPENAI_MODEL
+    def get_model_options(self) -> None:
+        if ENV in ("DEV", "UAT"):
+            from config import OPENAI_API_KEY, OPENAI_MODEL
 
-                openai_api_key = OPENAI_API_KEY
-                openai_model = GPT[OPENAI_MODEL]
-            else:
-                openai_api_key = st.text_input("Κλειδί για το API της OpenAI:")
-                openai_model = st.selectbox("Μοντέλο GPT:", options=list(GPT))
+            openai_api_key = OPENAI_API_KEY
+            openai_model = GPT[OPENAI_MODEL]
+        else:
+            openai_api_key = st.text_input("Κλειδί για το API της OpenAI:")
+            openai_model = st.selectbox("Μοντέλο GPT:", options=list(GPT))
 
-            st.toggle("Απάντηση για αξιολόγηση με MQM (σε JSON)", key="structured_output")
+        st.toggle("Απάντηση για αξιολόγηση με MQM (σε JSON)", key="structured_output")
 
-            self.get_system_prompt_area(
-                with_structured_output=st.session_state["structured_output"]
-            )
+        self.get_system_prompt_area(with_structured_output=st.session_state["structured_output"])
 
-            temperature = st.number_input(
-                "Temperature (μεταξύ 0 και 1)",
-                value=0.1,
-                min_value=float(0),
-                max_value=float(1),
-                step=0.1,
-            )
+        temperature = st.number_input(
+            "Temperature (μεταξύ 0 και 1)",
+            value=0.1,
+            min_value=float(0),
+            max_value=float(1),
+            step=0.1,
+        )
 
-            st.session_state["openai_model"] = openai_model or None
-            st.session_state["openai_key"] = openai_api_key or None
-            st.session_state["system_prompt"] = self.system_prompt
-            st.session_state["temperature"] = temperature or 0
-
-            st.session_state.conversation_handler.count_tokens(
-                text=self.system_prompt, model=openai_model, role="system"
-            )
-
-            st.divider()
-
-            input_col, output_col = st.columns(2)
-
-            with input_col:
-                input_cost = st.session_state.conversation_handler.calculate_cost(
-                    st.session_state.conversation_handler.input_tokens,
-                    model=openai_model,
-                    type="input",
-                )
-                st.write("## Input")
-                st.write(
-                    f"### {st.session_state.conversation_handler.input_tokens} (${input_cost:.04f})"
-                )
-
-                input_cost_breakdown = (
-                    f"({st.session_state.conversation_handler.system_tokens} συστήματος +  \n "
-                )
-                if st.session_state["structured_output"]:
-                    st.session_state.conversation_handler.count_tokens(
-                        json.dumps(MQM_RESPONSE_SCHEMA, ensure_ascii=False, indent=2),
-                        model=openai_model,
-                        role="json",
-                    )
-                    input_cost_breakdown += (
-                        f"{st.session_state.conversation_handler.json_tokens} μοντέλου JSON + \n "
-                    )
-                st.write(
-                    input_cost_breakdown
-                    + f"{st.session_state.conversation_handler.user_tokens} μηνύματος)"
-                )
-
-            with output_col:
-                output_tokens = st.session_state.conversation_handler.output_tokens
-                output_cost = st.session_state.conversation_handler.calculate_cost(
-                    output_tokens, model=openai_model, type="output"
-                )
-                st.write("## Output")
-                if output_cost < 0.001:
-                    output_cost_str = "0"
-                else:
-                    output_cost_str = f"{output_cost:.04f}"
-                st.write(f"### {output_tokens} (${output_cost_str})")
-
-            if ENV == "DEV":
-                st.divider()
-                st.write(dict(sorted(st.session_state.to_dict().items())))
+        st.session_state["system_prompt"] = self.system_prompt
+        st.session_state["model_options"] = {
+            "openai_model": openai_model or None,
+            "openai_key": openai_api_key or None,
+            "temperature": temperature or 0,
+        }
 
     def get_conversation_section(self) -> None:
-        openai_model = st.session_state["openai_model"]
-        openai_api_key = st.session_state["openai_key"]
+        openai_model = st.session_state.model_options["openai_model"]
+        openai_api_key = st.session_state.model_options["openai_key"]
 
         with st.expander(
             "Τελικό system prompt", expanded=st.session_state.get("show_final_prompt", False)
@@ -191,7 +198,7 @@ class ViewsManager:
             # TODO: Add helper buttons ("Clear convo", "Retry", "Export scenario")
 
     def get_prompt_with_placeholders(self) -> str:
-        placeholders = re.findall(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}", self.system_prompt)
+        placeholders = regex.findall(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}", self.system_prompt)
 
         # Remove duplicates while preserving order
         seen = set()
