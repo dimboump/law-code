@@ -12,3 +12,8 @@ dependencies = [
 
 [tool.ruff]
 line-length = 100
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18.2",
+]
