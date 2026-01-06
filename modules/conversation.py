@@ -1,4 +1,5 @@
 import json
+from io import BytesIO
 from uuid import uuid4
 
 import numpy as np
@@ -27,17 +28,21 @@ class ConversationHandler:
         st.session_state.prompt_placeholders = []
 
     def export_conversation(self) -> tuple[bytes, str, str]:
-        if not st.session_state.structured_output:
-            print("Exporting plain text file...")
-            data = "\n\n".join([msg["content"].strip() for msg in st.session_state.messages])
-            file_type, mime_type = "txt", "plain"
-        else:
-            print("Exporting Pandas DataFrame...")
+        if st.session_state.structured_output:
+            print("Exporting Excel file...")
             print(f"{st.session_state.prompt_placeholders=}")
-            data = self.get_conversation_table()
-            file_type = mime_type = "csv"
+            df = self.get_conversation_table()
+            data = self.to_excel(df)  # type: ignore
+            file_type = "xlsx"
+            mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        else:
+            print("Exporting plain text file...")
+            data = "\n\n".join(
+                [msg["content"].strip() for msg in st.session_state.messages]
+            ).encode("utf-8")
+            file_type, mime_type = "txt", "text/plain"
 
-        return data.encode("utf-8"), file_type, mime_type
+        return data, file_type, mime_type
 
     def get_conversation_table(self):
         prompt_placeholders: dict[str, str] = st.session_state.get("prompt_placeholders", [])
@@ -64,14 +69,14 @@ class ConversationHandler:
             except json.JSONDecodeError:
                 raise ValueError("There is something wrong with the history. Try again later.")
 
-            test_id = str(uuid4())
+            test_id = uuid4().hex
             rows = []
             print('About to iterate over data["errors"]')
             for err in data["errors"]:
                 row = {
                     "test_id": test_id,
                     "test_scenario": scenario,
-                    "error_id": str(uuid4()),
+                    "error_id": uuid4().hex,
                     "source_language": (
                         prompt_placeholders["src_lang"] if "S-" in scenario else np.nan
                     ),
@@ -99,7 +104,34 @@ class ConversationHandler:
                 }
                 rows.append(row)
                 print(f"{rows=}")
-            return pd.DataFrame(rows).to_csv(index=False)
+            return pd.DataFrame(rows).reset_index(drop=True)
+
+    def to_excel(self, df: pd.DataFrame) -> bytes:
+        output = BytesIO()
+        writer = pd.ExcelWriter(output, engine="xlsxwriter")
+        df.to_excel(writer, index=False)
+
+        worksheet = writer.sheets["Sheet1"]
+        worksheet.freeze_panes(1, 0)
+
+        # 2. Text wrap and width for "_text" columns
+        text_wrap_format = writer.book.add_format({"text_wrap": True})
+        for idx, col in enumerate(df.columns):
+            if "_text" in col:
+                worksheet.set_column(idx, idx, 69, text_wrap_format)
+            else:
+                # 4. Autofit for other columns
+                max_len = max([len(str(x)) for x in df[col].astype(str)] + [len(col)])
+                worksheet.set_column(idx, idx, max_len + 2)
+
+        # 3. Bold values under "scenario" column
+        if "test_scenario" in df.columns:
+            scenario_col_idx = df.columns.get_loc("test_scenario")
+            bold_format = writer.book.add_format({"bold": True})
+            worksheet.set_column(scenario_col_idx, scenario_col_idx, None, bold_format)
+
+        writer.close()
+        return output.getvalue()
 
     def calculate_cost(self, n_tokens: int, model: GPT, type: str = "input") -> float:
         if type == "input":

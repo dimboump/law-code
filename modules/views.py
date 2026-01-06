@@ -30,7 +30,7 @@ class ViewsManager:
         self.info_box = st.empty()
 
         if st.button(
-            f"Λήψη {'παραδείγματος' if st.session_state.structured_output else 'συνομιλίας'}",
+            "Εξαγωγή συνομιλίας",
             type="primary",
             use_container_width=True,
         ):
@@ -41,16 +41,19 @@ class ViewsManager:
                     st.session_state.conversation_handler.export_conversation()
                 )
 
-                if data:
-                    st.download_button(
-                        "Εξαγωγή συνομιλίας",
-                        data=data,
-                        file_name=f"conversation.{file_type}",
-                        mime=f"text/{mime_type}",
-                        on_click="ignore",
-                        use_container_width=True,
-                        icon=":material/download:",
-                    )
+                st.download_button(
+                    (
+                        "Λήψη παραδείγματος"
+                        if st.session_state.structured_output
+                        else "Λήψη συνομιλίας"
+                    ),
+                    data=data if file_type == "xlsx" else data,
+                    file_name=f"conversation.{file_type}",
+                    mime=mime_type,
+                    on_click="ignore",
+                    use_container_width=True,
+                    icon=":material/download:",
+                )
 
         if ENV == "DEV":
             st.divider()
@@ -167,7 +170,13 @@ class ViewsManager:
         for msg in st.session_state["messages"]:
             if msg["role"] == "system":
                 continue
-            st.chat_message(msg["role"]).write(msg["content"])
+            elif msg["role"] == "user":
+                st.chat_message(msg["role"]).write(msg["content"])
+            else:
+                if st.session_state.get("structured_output", False):
+                    st.chat_message("assistant").json(msg["content"])
+                else:
+                    st.chat_message("assistant").write(msg)
 
         placeholder_text = "Γράψε μου μήνυμα"
         if st.session_state["structured_output"]:
@@ -223,7 +232,7 @@ class ViewsManager:
             st.session_state.conversation_handler.add_message({"role": "assistant", "content": msg})
             print("LLM RESPONSE ADDED:", f"{st.session_state.messages=}", sep="\n", end="\n\n")
 
-            if st.session_state["structured_output"]:
+            if st.session_state.get("structured_output", False):
                 if isinstance(msg, str):
                     msg_dict = json.loads(msg)
                 else:
@@ -233,8 +242,6 @@ class ViewsManager:
                 st.chat_message("assistant").write(msg)
 
             st.session_state["response_done"] = True
-
-            # TODO: Add helper buttons ("Clear convo", "Retry", "Export scenario")
 
     def get_prompt_with_placeholders(self) -> str:
         placeholders = regex.findall(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}", self.system_prompt)
@@ -277,4 +284,5 @@ class ViewsManager:
             else:
                 middle = "μεταβλητές δεν έχουν" if empty_placeholders > 1 else "μεταβλητή δεν έχει"
                 st.warning(f"{empty_placeholders} {middle} τιμή")
+
         return self.system_prompt
