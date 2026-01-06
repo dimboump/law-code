@@ -124,11 +124,12 @@ class ConversationHandler:
                 max_len = max([len(str(x)) for x in df[col].astype(str)] + [len(col)])
                 worksheet.set_column(idx, idx, max_len + 2)
 
-        # 3. Bold values under "scenario" column
-        if "test_scenario" in df.columns:
-            scenario_col_idx = df.columns.get_loc("test_scenario")
-            bold_format = writer.book.add_format({"bold": True})
-            worksheet.set_column(scenario_col_idx, scenario_col_idx, None, bold_format)
+        # 3. Bold important columns
+        for col_name in {"test_scenario", "error_category", "severity"}:
+            if col_name in df.columns:
+                col_idx = df.columns.get_loc(col_name)
+                bold_format = writer.book.add_format({"bold": True})
+                worksheet.set_column(col_idx, col_idx, None, bold_format)
 
         writer.close()
         return output.getvalue()
