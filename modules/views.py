@@ -1,4 +1,6 @@
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import regex
 import streamlit as st
@@ -41,6 +43,8 @@ class ViewsManager:
                     st.session_state.conversation_handler.export_conversation()
                 )
 
+                now = datetime.now(ZoneInfo("Europe/Athens"))
+
                 st.download_button(
                     (
                         "Λήψη παραδείγματος"
@@ -48,7 +52,7 @@ class ViewsManager:
                         else "Λήψη συνομιλίας"
                     ),
                     data=data if file_type == "xlsx" else data,
-                    file_name=f"conversation.{file_type}",
+                    file_name=f"conversation_{now.strftime('%Y-%m-%d_%H-%M-%S')}.{file_type}",
                     mime=mime_type,
                     on_click="ignore",
                     use_container_width=True,
