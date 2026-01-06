@@ -1,11 +1,9 @@
 import streamlit as st
 
+from config import APP_NAME
 from modules.conversation import ConversationHandler
 from modules.session import SessionHandler
 from modules.views import ViewsManager
-
-ENV = "DEV"
-APP_NAME = "Τσο και Law"
 
 st.set_page_config(
     page_title=APP_NAME,
@@ -16,7 +14,6 @@ st.title(APP_NAME)
 
 if "session_handler" not in st.session_state:
     st.session_state.session_handler = SessionHandler()
-    st.session_state.session_handler.create_session()
 
 if "conversation_handler" not in st.session_state:
     st.session_state.conversation_handler = ConversationHandler()
