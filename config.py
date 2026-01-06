@@ -5,7 +5,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 APP_NAME = "Τσο και Law"
-ENV = "DEV" if "dimb" in os.getlogin() else "PROD"
+
+try:
+    usr = os.getlogin()
+    ENV = "DEV"
+except OSError:
+    ENV = "PROD"
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
