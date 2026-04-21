@@ -114,7 +114,9 @@ class ViewsManager:
 
     def get_system_prompt_area(self):
         if st.session_state.get("structured_output", False):
-            scenario = st.radio("Σενάριο MQM:", options=["S-T", "R-T", "S-R-T"], key="scenario")
+            scenario = st.radio(
+                "Σενάριο MQM:", options=["T", "S-T", "R-T", "S-R-T"], key="scenario"
+            )
             system_prompt = MQM_PROMPTS[scenario].strip()
         else:
             if st.session_state.get("prompt_placeholders", []):

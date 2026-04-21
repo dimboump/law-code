@@ -24,11 +24,13 @@ MQM_SOURCE_TEXT = """{src_lang} source: "{source}"\n\n"""
 MQM_TARGET_TEXT = """{tgt_lang} translation: "{translation}"\n\n"""
 MQM_REF_TEXT = """{tgt_lang} reference: "{reference}"\n\n"""
 
+MQM_T_PROMPT = MQM_BASE_PROMPT + MQM_TARGET_TEXT
 MQM_S_T_PROMPT = MQM_BASE_PROMPT + MQM_SOURCE_TEXT + MQM_TARGET_TEXT
 MQM_R_T_PROMPT = MQM_BASE_PROMPT + MQM_REF_TEXT + MQM_TARGET_TEXT
 MQM_S_R_T_PROMPT = MQM_BASE_PROMPT + MQM_SOURCE_TEXT + MQM_REF_TEXT + MQM_TARGET_TEXT
 
 MQM_PROMPTS = {
+    "T": MQM_T_PROMPT,
     "S-T": MQM_S_T_PROMPT,
     "R-T": MQM_R_T_PROMPT,
     "S-R-T": MQM_S_R_T_PROMPT,
